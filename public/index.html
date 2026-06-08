@@ -7,11 +7,6 @@
   <title>Absensi Online Cloud</title>
 
   <link rel="stylesheet" href="style.css" />
-
-  <!-- QR Scanner Library -->
-  <script src="https://unpkg.com/html5-qrcode" defer></script>
-
-  <!-- App Script -->
   <script src="app.js" defer></script>
 </head>
 
@@ -82,11 +77,6 @@
           Riwayat Saya
         </button>
 
-        <button class="menu-item" id="menuQr" onclick="showSection('qrSection', 'menuQr')">
-          <span>▦</span>
-          Scan QR
-        </button>
-
         <button class="menu-item admin-only hidden" id="menuAdmin" onclick="showSection('adminSection', 'menuAdmin')">
           <span>⚙</span>
           Panel Admin
@@ -138,7 +128,7 @@
             <h2 id="heroTitle">Selamat Datang di Sistem Absensi</h2>
             <p>
               Sistem absensi mahasiswa berbasis AWS EC2, Docker, Kubernetes Minikube,
-              PostgreSQL, dan QR Code.
+              PostgreSQL, dan tampilan modern bernuansa Telkom University.
             </p>
           </div>
 
@@ -184,6 +174,10 @@
               <h2>Absensi Cepat</h2>
             </div>
 
+            <p class="muted-text">
+              Gunakan fitur ini untuk melakukan check-in atau check-out secara langsung.
+            </p>
+
             <textarea id="quickNote" placeholder="Catatan absensi (opsional)"></textarea>
 
             <div class="button-row">
@@ -226,7 +220,7 @@
           </div>
 
           <p class="muted-text">
-            Kamu dapat melakukan check-in manual atau menggunakan QR Code dari admin.
+            Mahasiswa dapat melakukan check-in saat hadir dan check-out saat selesai.
           </p>
 
           <div class="form-group">
@@ -235,7 +229,7 @@
           </div>
 
           <div class="button-row">
-            <button class="btn-primary" onclick="checkIn()">Check-in Manual</button>
+            <button class="btn-primary" onclick="checkIn()">Check-in</button>
             <button class="btn-secondary" onclick="checkOut()">Check-out</button>
           </div>
 
@@ -268,67 +262,18 @@
         </div>
       </section>
 
-      <!-- QR SECTION -->
-      <section id="qrSection" class="content-section hidden">
-        <div class="qr-layout">
-          <div class="panel-card">
-            <div class="section-title">
-              <span></span>
-              <h2>Scan QR Absensi</h2>
-            </div>
-
-            <p class="muted-text">
-              Arahkan kamera ke QR Code yang ditampilkan oleh admin/dosen.
-            </p>
-
-            <div id="qr-reader" class="qr-reader"></div>
-
-            <div class="button-row">
-              <button class="btn-primary" onclick="startQrScanner()">Mulai Scan QR</button>
-              <button class="btn-secondary" onclick="stopQrScanner()">Stop Scan</button>
-            </div>
-
-            <p id="qrMessage" class="message-text"></p>
-          </div>
-
-          <div class="panel-card qr-help">
-            <h3>Cara Menggunakan QR</h3>
-            <ol>
-              <li>Admin membuat QR absensi hari ini.</li>
-              <li>Mahasiswa login ke aplikasi.</li>
-              <li>Mahasiswa membuka menu Scan QR.</li>
-              <li>Scan QR dari layar admin/dosen.</li>
-              <li>Absensi otomatis tersimpan ke database.</li>
-            </ol>
-          </div>
-        </div>
-      </section>
-
       <!-- ADMIN SECTION -->
       <section id="adminSection" class="content-section hidden">
         <div class="admin-grid">
           <div class="panel-card">
             <div class="section-title">
               <span></span>
-              <h2>QR Absensi</h2>
+              <h2>Tambah User</h2>
             </div>
 
             <p class="muted-text">
-              Generate QR untuk absensi mahasiswa. QR berlaku selama 15 menit.
+              Admin dapat menambahkan akun mahasiswa atau admin baru.
             </p>
-
-            <button class="btn-primary" onclick="generateQrSession()">Buat QR Hari Ini</button>
-
-            <div id="qrAdminBox" class="qr-admin-box">
-              <p class="muted-text">QR belum dibuat.</p>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <div class="section-title">
-              <span></span>
-              <h2>Tambah User</h2>
-            </div>
 
             <div class="form-group">
               <label>Nama Lengkap</label>
@@ -354,6 +299,34 @@
             </div>
 
             <button class="btn-primary" onclick="createUser()">Tambah User</button>
+          </div>
+
+          <div class="panel-card">
+            <div class="section-title">
+              <span></span>
+              <h2>Ringkasan Admin</h2>
+            </div>
+
+            <p class="muted-text">
+              Panel admin digunakan untuk melihat seluruh data absensi mahasiswa
+              dan mengelola akun pengguna.
+            </p>
+
+            <div class="stats-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 0;">
+              <div class="stat-card">
+                <div class="stat-icon blue">👥</div>
+                <h3 id="adminTotalUsers">0</h3>
+                <p>User</p>
+                <span>Terdaftar</span>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon green">✅</div>
+                <h3 id="adminCheckInToday">0</h3>
+                <p>Hadir</p>
+                <span>Hari ini</span>
+              </div>
+            </div>
           </div>
         </div>
 

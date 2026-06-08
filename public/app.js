@@ -1,5 +1,4 @@
 let currentUser = null;
-let qrScanner = null;
 
 /* =========================
    AUTH TOKEN
@@ -136,7 +135,6 @@ function showSection(sectionId, menuId) {
     "dashboardSection",
     "attendanceSection",
     "historySection",
-    "qrSection",
     "adminSection"
   ];
 
@@ -154,10 +152,6 @@ function showSection(sectionId, menuId) {
   if (menuId) {
     const menu = document.getElementById(menuId);
     if (menu) menu.classList.add("active");
-  }
-
-  if (sectionId !== "qrSection") {
-    stopQrScanner();
   }
 }
 
@@ -190,7 +184,6 @@ async function login() {
 }
 
 function logout() {
-  stopQrScanner();
   clearToken();
   currentUser = null;
   location.reload();
@@ -208,7 +201,6 @@ async function afterLogin() {
   if (currentUser.role === "admin") {
     showAdminMenu();
     await loadAdminAttendance();
-    await loadActiveQrSession();
   } else {
     hideAdminMenu();
   }
@@ -262,10 +254,21 @@ async function loadStats() {
   try {
     const data = await request("/api/dashboard/stats");
 
-    document.getElementById("totalUsers").innerText = data.totalUsers;
-    document.getElementById("checkInToday").innerText = data.checkInToday;
-    document.getElementById("checkOutToday").innerText = data.checkOutToday;
-    document.getElementById("attendanceRate").innerText = `${data.attendanceRate}%`;
+    const totalUsers = document.getElementById("totalUsers");
+    const checkInToday = document.getElementById("checkInToday");
+    const checkOutToday = document.getElementById("checkOutToday");
+    const attendanceRate = document.getElementById("attendanceRate");
+
+    const adminTotalUsers = document.getElementById("adminTotalUsers");
+    const adminCheckInToday = document.getElementById("adminCheckInToday");
+
+    if (totalUsers) totalUsers.innerText = data.totalUsers;
+    if (checkInToday) checkInToday.innerText = data.checkInToday;
+    if (checkOutToday) checkOutToday.innerText = data.checkOutToday;
+    if (attendanceRate) attendanceRate.innerText = `${data.attendanceRate}%`;
+
+    if (adminTotalUsers) adminTotalUsers.innerText = data.totalUsers;
+    if (adminCheckInToday) adminCheckInToday.innerText = data.checkInToday;
   } catch (err) {
     console.error("Gagal load statistik:", err.message);
   }
@@ -476,199 +479,6 @@ async function createUser() {
   } catch (err) {
     alert(err.message);
   }
-}
-
-/* =========================
-   QR ADMIN
-========================= */
-
-async function generateQrSession() {
-  try {
-    const data = await request("/api/admin/qr-session", {
-      method: "POST"
-    });
-
-    renderAdminQr(data);
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-async function loadActiveQrSession() {
-  try {
-    const data = await request("/api/admin/qr-session/active");
-
-    if (!data.active) return;
-
-    renderAdminQr(data);
-  } catch (err) {
-    console.error("Tidak ada QR aktif:", err.message);
-  }
-}
-
-function renderAdminQr(data) {
-  const box = document.getElementById("qrAdminBox");
-  if (!box) return;
-
-  const expiresAt = data.session?.expires_at
-    ? formatDateTime(data.session.expires_at)
-    : "-";
-
-  box.innerHTML = `
-    <p><strong>QR Absensi Aktif</strong></p>
-    <img src="${data.qrImage}" alt="QR Absensi" />
-    <p>Berlaku sampai: <strong>${expiresAt}</strong></p>
-    <p class="muted-text">
-      Tampilkan QR ini ke mahasiswa agar mereka dapat melakukan absensi.
-    </p>
-
-    <details>
-      <summary>Payload QR untuk demo manual</summary>
-      <textarea readonly style="margin-top:10px; min-height:90px;">${data.qrPayload || ""}</textarea>
-      <button class="btn-secondary" onclick="copyQrPayload()">Copy Payload</button>
-    </details>
-  `;
-
-  window.latestQrPayload = data.qrPayload || "";
-}
-
-async function copyQrPayload() {
-  if (!window.latestQrPayload) {
-    alert("Payload QR belum tersedia");
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(window.latestQrPayload);
-    alert("Payload QR berhasil disalin");
-  } catch (err) {
-    alert("Gagal copy payload. Silakan copy manual dari textarea.");
-  }
-}
-
-/* =========================
-   QR SCANNER USER
-========================= */
-
-function startQrScanner() {
-  const messageId = "qrMessage";
-
-  setMessage(messageId, "Mengaktifkan kamera...", false);
-
-  if (!window.Html5Qrcode) {
-    setMessage(
-      messageId,
-      "Library QR scanner belum termuat. Pastikan koneksi internet aktif.",
-      true
-    );
-    showManualQrInput();
-    return;
-  }
-
-  if (qrScanner) {
-    setMessage(messageId, "Scanner sudah aktif.");
-    return;
-  }
-
-  qrScanner = new Html5Qrcode("qr-reader");
-
-  qrScanner
-    .start(
-      { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: {
-          width: 240,
-          height: 240
-        }
-      },
-      async (decodedText) => {
-        await submitQrAttendance(decodedText);
-      },
-      () => {}
-    )
-    .then(() => {
-      setMessage(messageId, "Scanner aktif. Arahkan kamera ke QR absensi.");
-    })
-    .catch((err) => {
-      console.error(err);
-
-      setMessage(
-        messageId,
-        "Kamera gagal aktif. Jika aplikasi dibuka lewat HTTP public IP, browser bisa memblokir kamera. Gunakan input manual di bawah untuk demo.",
-        true
-      );
-
-      showManualQrInput();
-      qrScanner = null;
-    });
-}
-
-function stopQrScanner() {
-  if (!qrScanner) return;
-
-  qrScanner
-    .stop()
-    .then(() => {
-      qrScanner.clear();
-      qrScanner = null;
-      setMessage("qrMessage", "Scanner dihentikan.");
-    })
-    .catch(() => {
-      qrScanner = null;
-    });
-}
-
-async function submitQrAttendance(qrText) {
-  try {
-    const data = await request("/api/attendance/scan-qr", {
-      method: "POST",
-      body: JSON.stringify({ qrText })
-    });
-
-    setMessage("qrMessage", data.message);
-
-    await refreshAttendanceData();
-    stopQrScanner();
-  } catch (err) {
-    setMessage("qrMessage", err.message, true);
-  }
-}
-
-function showManualQrInput() {
-  const qrSection = document.getElementById("qrSection");
-  if (!qrSection) return;
-
-  if (document.getElementById("manualQrBox")) return;
-
-  const targetPanel = qrSection.querySelector(".panel-card");
-  if (!targetPanel) return;
-
-  targetPanel.insertAdjacentHTML(
-    "beforeend",
-    `
-      <div id="manualQrBox" class="qr-admin-box" style="text-align:left;">
-        <h3>Input Manual QR untuk Demo</h3>
-        <p class="muted-text">
-          Jika kamera tidak aktif karena browser memblokir akses kamera di HTTP,
-          copy payload QR dari panel admin, lalu paste di sini.
-        </p>
-        <textarea id="manualQrText" placeholder="Paste payload QR di sini"></textarea>
-        <button class="btn-primary" onclick="submitManualQr()">Submit QR Manual</button>
-      </div>
-    `
-  );
-}
-
-async function submitManualQr() {
-  const textarea = document.getElementById("manualQrText");
-
-  if (!textarea || !textarea.value.trim()) {
-    setMessage("qrMessage", "Payload QR belum diisi", true);
-    return;
-  }
-
-  await submitQrAttendance(textarea.value.trim());
 }
 
 /* =========================
