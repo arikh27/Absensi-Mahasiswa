@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Absensi Online Cloud</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Absensi Online Cloud</h1>
+    <p>AWS EC2 + Docker + Kubernetes Minikube + PostgreSQL</p>
+
+    <div id="loginBox" class="card">
+      <h2>Login</h2>
+      <input id="email" placeholder="Email" value="admin@absensi.com" />
+      <input id="password" type="password" placeholder="Password" value="admin123" />
+      <button onclick="login()">Login</button>
+      <p class="info">Default admin: admin@absensi.com / admin123</p>
+    </div>
+
+    <div id="dashboard" class="hidden">
+      <div class="card">
+        <div class="top">
+          <div>
+            <h2>Dashboard</h2>
+            <p id="userInfo"></p>
+          </div>
+          <button class="danger" onclick="logout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Absensi Hari Ini</h3>
+          <textarea id="note" placeholder="Catatan absensi"></textarea>
+          <button onclick="checkIn()">Check-in</button>
+          <button onclick="checkOut()">Check-out</button>
+          <p id="msg"></p>
+        </div>
+
+        <div class="card">
+          <h3>Riwayat Saya</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Masuk</th>
+                <th>Pulang</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="myTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="adminBox" class="card hidden">
+        <h3>Panel Admin</h3>
+
+        <h4>Tambah User</h4>
+        <input id="newName" placeholder="Nama" />
+        <input id="newEmail" placeholder="Email" />
+        <input id="newPassword" type="password" placeholder="Password" />
+        <select id="newRole">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button onclick="createUser()">Tambah User</button>
+
+        <h4>Semua Data Absensi</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>Nama</th>
+              <th>Email</th>
+              <th>Tanggal</th>
+              <th>Masuk</th>
+              <th>Pulang</th>
+            </tr>
+          </thead>
+          <tbody id="adminTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
