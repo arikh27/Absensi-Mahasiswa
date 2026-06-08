@@ -3,6 +3,8 @@ const path = require("path");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const QRCode = require("qrcode");
+const crypto = require("crypto");
 const { Pool } = require("pg");
 
 const app = express();
@@ -57,7 +59,7 @@ function auth(req, res, next) {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch (err) {
-    res.status(401).json({ message: "Token tidak valid" });
+    return res.status(401).json({ message: "Token tidak valid" });
   }
 }
 
@@ -70,13 +72,13 @@ function adminOnly(req, res, next) {
 }
 
 async function waitDB() {
-  for (let i = 1; i <= 20; i++) {
+  for (let i = 1; i <= 30; i++) {
     try {
       await pool.query("SELECT NOW()");
       console.log("Database connected");
       return;
     } catch (err) {
-      console.log(`Menunggu database ${i}/20...`);
+      console.log(`Menunggu database ${i}/30...`);
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
@@ -111,6 +113,18 @@ async function initDB() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS attendance_qr_sessions (
+      id SERIAL PRIMARY KEY,
+      session_token VARCHAR(120) UNIQUE NOT NULL,
+      attendance_date DATE NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+
   const admin = await pool.query(
     "SELECT id FROM users WHERE email = $1",
     ["admin@absensi.com"]
@@ -120,13 +134,20 @@ async function initDB() {
     const hash = await bcrypt.hash("admin123", 10);
 
     await pool.query(
-      "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4)",
+      `
+      INSERT INTO users (name, email, password_hash, role)
+      VALUES ($1, $2, $3, $4)
+      `,
       ["Administrator", "admin@absensi.com", hash, "admin"]
     );
 
     console.log("Admin default dibuat: admin@absensi.com / admin123");
   }
 }
+
+/* =========================
+   AUTH
+========================= */
 
 app.post("/api/auth/login", async (req, res) => {
   try {
@@ -148,7 +169,7 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ message: "Email atau password salah" });
     }
 
-    res.json({
+    return res.json({
       message: "Login berhasil",
       token: makeToken(user),
       user: {
@@ -160,13 +181,69 @@ app.post("/api/auth/login", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
 app.get("/api/me", auth, (req, res) => {
-  res.json({ user: req.user });
+  return res.json({ user: req.user });
 });
+
+/* =========================
+   DASHBOARD STATS
+========================= */
+
+app.get("/api/dashboard/stats", auth, async (req, res) => {
+  try {
+    const today = todayJakarta();
+
+    const totalUsersResult = await pool.query(`
+      SELECT COUNT(*)::int AS total
+      FROM users
+      WHERE role = 'user'
+    `);
+
+    const checkInResult = await pool.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM attendances
+      WHERE attendance_date = $1
+      `,
+      [today]
+    );
+
+    const checkOutResult = await pool.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM attendances
+      WHERE attendance_date = $1
+        AND check_out IS NOT NULL
+      `,
+      [today]
+    );
+
+    const totalUsers = totalUsersResult.rows[0].total;
+    const checkInToday = checkInResult.rows[0].total;
+    const checkOutToday = checkOutResult.rows[0].total;
+
+    const attendanceRate =
+      totalUsers > 0 ? Math.round((checkInToday / totalUsers) * 100) : 0;
+
+    return res.json({
+      totalUsers,
+      checkInToday,
+      checkOutToday,
+      attendanceRate
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Gagal mengambil statistik" });
+  }
+});
+
+/* =========================
+   ATTENDANCE MANUAL
+========================= */
 
 app.post("/api/attendance/check-in", auth, async (req, res) => {
   try {
@@ -174,7 +251,11 @@ app.post("/api/attendance/check-in", auth, async (req, res) => {
     const { note } = req.body;
 
     const existing = await pool.query(
-      "SELECT * FROM attendances WHERE user_id = $1 AND attendance_date = $2",
+      `
+      SELECT *
+      FROM attendances
+      WHERE user_id = $1 AND attendance_date = $2
+      `,
       [req.user.id, today]
     );
 
@@ -188,13 +269,16 @@ app.post("/api/attendance/check-in", auth, async (req, res) => {
       VALUES ($1, $2, NOW(), $3, $4)
       RETURNING *
       `,
-      [req.user.id, today, "Hadir", note || ""]
+      [req.user.id, today, "Hadir", note || "Absensi manual"]
     );
 
-    res.json({ message: "Check-in berhasil", attendance: result.rows[0] });
+    return res.json({
+      message: "Check-in berhasil",
+      attendance: result.rows[0]
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Gagal check-in" });
+    return res.status(500).json({ message: "Gagal check-in" });
   }
 });
 
@@ -203,7 +287,11 @@ app.post("/api/attendance/check-out", auth, async (req, res) => {
     const today = todayJakarta();
 
     const existing = await pool.query(
-      "SELECT * FROM attendances WHERE user_id = $1 AND attendance_date = $2",
+      `
+      SELECT *
+      FROM attendances
+      WHERE user_id = $1 AND attendance_date = $2
+      `,
       [req.user.id, today]
     );
 
@@ -225,51 +313,262 @@ app.post("/api/attendance/check-out", auth, async (req, res) => {
       [req.user.id, today]
     );
 
-    res.json({ message: "Check-out berhasil", attendance: result.rows[0] });
+    return res.json({
+      message: "Check-out berhasil",
+      attendance: result.rows[0]
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Gagal check-out" });
+    return res.status(500).json({ message: "Gagal check-out" });
   }
 });
 
 app.get("/api/attendance/me", auth, async (req, res) => {
-  const result = await pool.query(
-    `
-    SELECT *
-    FROM attendances
-    WHERE user_id = $1
-    ORDER BY attendance_date DESC
-    LIMIT 30
-    `,
-    [req.user.id]
-  );
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM attendances
+      WHERE user_id = $1
+      ORDER BY attendance_date DESC, check_in DESC
+      LIMIT 30
+      `,
+      [req.user.id]
+    );
 
-  res.json({ attendances: result.rows });
+    return res.json({ attendances: result.rows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Gagal mengambil riwayat absensi" });
+  }
 });
 
-app.get("/api/admin/attendance", auth, adminOnly, async (req, res) => {
-  const result = await pool.query(`
-    SELECT 
-      a.id,
-      u.name,
-      u.email,
-      a.attendance_date,
-      a.check_in,
-      a.check_out,
-      a.status,
-      a.note
-    FROM attendances a
-    JOIN users u ON a.user_id = u.id
-    ORDER BY a.attendance_date DESC, a.check_in DESC
-    LIMIT 100
-  `);
+/* =========================
+   QR ATTENDANCE
+========================= */
 
-  res.json({ attendances: result.rows });
+app.post("/api/admin/qr-session", auth, adminOnly, async (req, res) => {
+  try {
+    const today = todayJakarta();
+
+    await pool.query(
+      `
+      UPDATE attendance_qr_sessions
+      SET is_active = FALSE
+      WHERE attendance_date = $1
+        AND is_active = TRUE
+      `,
+      [today]
+    );
+
+    const sessionToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    const result = await pool.query(
+      `
+      INSERT INTO attendance_qr_sessions
+      (session_token, attendance_date, expires_at, created_by, is_active)
+      VALUES ($1, $2, $3, $4, TRUE)
+      RETURNING *
+      `,
+      [sessionToken, today, expiresAt, req.user.id]
+    );
+
+    const qrPayload = JSON.stringify({
+      type: "ABSENSI_TELU_QR",
+      token: sessionToken,
+      date: today
+    });
+
+    const qrImage = await QRCode.toDataURL(qrPayload, {
+      width: 320,
+      margin: 2
+    });
+
+    return res.json({
+      message: "QR absensi berhasil dibuat",
+      qrImage,
+      qrPayload,
+      session: result.rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Gagal membuat QR absensi" });
+  }
+});
+
+app.get("/api/admin/qr-session/active", auth, adminOnly, async (req, res) => {
+  try {
+    const today = todayJakarta();
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM attendance_qr_sessions
+      WHERE attendance_date = $1
+        AND is_active = TRUE
+        AND expires_at > NOW()
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [today]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ active: false });
+    }
+
+    const session = result.rows[0];
+
+    const qrPayload = JSON.stringify({
+      type: "ABSENSI_TELU_QR",
+      token: session.session_token,
+      date: session.attendance_date
+    });
+
+    const qrImage = await QRCode.toDataURL(qrPayload, {
+      width: 320,
+      margin: 2
+    });
+
+    return res.json({
+      active: true,
+      qrImage,
+      qrPayload,
+      session
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Gagal mengambil QR aktif" });
+  }
+});
+
+app.post("/api/attendance/scan-qr", auth, async (req, res) => {
+  try {
+    const { qrText } = req.body;
+
+    if (!qrText) {
+      return res.status(400).json({ message: "Data QR kosong" });
+    }
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(qrText);
+    } catch (err) {
+      return res.status(400).json({ message: "Format QR tidak valid" });
+    }
+
+    if (parsed.type !== "ABSENSI_TELU_QR" || !parsed.token) {
+      return res.status(400).json({ message: "QR bukan QR absensi yang valid" });
+    }
+
+    const sessionResult = await pool.query(
+      `
+      SELECT *
+      FROM attendance_qr_sessions
+      WHERE session_token = $1
+        AND is_active = TRUE
+        AND expires_at > NOW()
+      `,
+      [parsed.token]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      return res.status(400).json({
+        message: "QR sudah kadaluarsa atau tidak aktif"
+      });
+    }
+
+    const today = todayJakarta();
+
+    const existing = await pool.query(
+      `
+      SELECT *
+      FROM attendances
+      WHERE user_id = $1 AND attendance_date = $2
+      `,
+      [req.user.id, today]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
+        message: "Kamu sudah melakukan absensi hari ini"
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO attendances (user_id, attendance_date, check_in, status, note)
+      VALUES ($1, $2, NOW(), 'Hadir', 'Absensi via QR')
+      RETURNING *
+      `,
+      [req.user.id, today]
+    );
+
+    return res.json({
+      message: "Absensi QR berhasil",
+      attendance: result.rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Gagal melakukan absensi QR" });
+  }
+});
+
+/* =========================
+   ADMIN
+========================= */
+
+app.get("/api/admin/attendance", auth, adminOnly, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id,
+        u.name,
+        u.email,
+        a.attendance_date,
+        a.check_in,
+        a.check_out,
+        a.status,
+        a.note
+      FROM attendances a
+      JOIN users u ON a.user_id = u.id
+      ORDER BY a.attendance_date DESC, a.check_in DESC
+      LIMIT 100
+    `);
+
+    return res.json({ attendances: result.rows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Gagal mengambil data absensi admin" });
+  }
+});
+
+app.get("/api/admin/users", auth, adminOnly, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name, email, role, created_at
+      FROM users
+      ORDER BY id ASC
+    `);
+
+    return res.json({ users: result.rows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Gagal mengambil data user" });
+  }
 });
 
 app.post("/api/admin/users", auth, adminOnly, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: "Nama, email, dan password wajib diisi"
+      });
+    }
 
     const hash = await bcrypt.hash(password, 10);
 
@@ -282,28 +581,43 @@ app.post("/api/admin/users", auth, adminOnly, async (req, res) => {
       [name, email, hash, role || "user"]
     );
 
-    res.json({ message: "User berhasil dibuat", user: result.rows[0] });
+    return res.json({
+      message: "User berhasil dibuat",
+      user: result.rows[0]
+    });
   } catch (err) {
     if (err.code === "23505") {
       return res.status(400).json({ message: "Email sudah digunakan" });
     }
 
     console.error(err);
-    res.status(500).json({ message: "Gagal membuat user" });
+    return res.status(500).json({ message: "Gagal membuat user" });
   }
 });
+
+/* =========================
+   HEALTH CHECK
+========================= */
 
 app.get("/health", async (req, res) => {
   try {
     await pool.query("SELECT 1");
-    res.json({ status: "OK", database: "connected" });
+
+    return res.json({
+      status: "OK",
+      database: "connected",
+      app: "Absensi Online Cloud"
+    });
   } catch (err) {
-    res.status(500).json({ status: "ERROR", database: "disconnected" });
+    return res.status(500).json({
+      status: "ERROR",
+      database: "disconnected"
+    });
   }
 });
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  return res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 async function start() {
@@ -316,6 +630,6 @@ async function start() {
 }
 
 start().catch((err) => {
-  console.error(err);
+  console.error("Gagal menjalankan server:", err);
   process.exit(1);
 });

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: absensi-app
-          image: absensi-online:1.0
+          image: absensi-online:2.1
           imagePullPolicy: Never
           ports:
             - containerPort: 3000
