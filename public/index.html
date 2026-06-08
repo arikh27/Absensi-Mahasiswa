@@ -2,88 +2,400 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Absensi Online Cloud</title>
+
   <link rel="stylesheet" href="style.css" />
+
+  <!-- QR Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode" defer></script>
+
+  <!-- App Script -->
+  <script src="app.js" defer></script>
 </head>
+
 <body>
-  <div class="container">
-    <h1>Absensi Online Cloud</h1>
-    <p>AWS EC2 + Docker + Kubernetes Minikube + PostgreSQL</p>
+  <!-- LOGIN PAGE -->
+  <section id="loginPage" class="login-page">
+    <div class="login-wrapper">
+      <div class="login-brand">
+        <div class="brand-icon">A</div>
+        <div>
+          <h1>Absensi Online Cloud</h1>
+          <p>Telkom University Attendance System</p>
+        </div>
+      </div>
 
-    <div id="loginBox" class="card">
-      <h2>Login</h2>
-      <input id="email" placeholder="Email" value="admin@absensi.com" />
-      <input id="password" type="password" placeholder="Password" value="admin123" />
-      <button onclick="login()">Login</button>
-      <p class="info">Default admin: admin@absensi.com / admin123</p>
+      <div class="login-card">
+        <div class="login-header">
+          <h2>Masuk ke Sistem</h2>
+          <p>Gunakan akun admin atau mahasiswa untuk melanjutkan.</p>
+        </div>
+
+        <div class="form-group">
+          <label>Email</label>
+          <input id="email" type="email" placeholder="Masukkan email" value="admin@absensi.com" />
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <input id="password" type="password" placeholder="Masukkan password" value="admin123" />
+        </div>
+
+        <button class="btn-primary full" onclick="login()">Login</button>
+
+        <div class="login-info">
+          <p><b>Default Admin</b></p>
+          <p>Email: admin@absensi.com</p>
+          <p>Password: admin123</p>
+        </div>
+      </div>
     </div>
+  </section>
 
-    <div id="dashboard" class="hidden">
-      <div class="card">
-        <div class="top">
-          <div>
-            <h2>Dashboard</h2>
-            <p id="userInfo"></p>
+  <!-- DASHBOARD APP -->
+  <section id="dashboardPage" class="app-layout hidden">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">A</div>
+        <div>
+          <h2>Absensi</h2>
+          <p>Online Cloud</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <button class="menu-item active" id="menuDashboard" onclick="showSection('dashboardSection', 'menuDashboard')">
+          <span>⌂</span>
+          Dashboard
+        </button>
+
+        <button class="menu-item" id="menuAttendance" onclick="showSection('attendanceSection', 'menuAttendance')">
+          <span>✓</span>
+          Absensi Hari Ini
+        </button>
+
+        <button class="menu-item" id="menuHistory" onclick="showSection('historySection', 'menuHistory')">
+          <span>◷</span>
+          Riwayat Saya
+        </button>
+
+        <button class="menu-item" id="menuQr" onclick="showSection('qrSection', 'menuQr')">
+          <span>▦</span>
+          Scan QR
+        </button>
+
+        <button class="menu-item admin-only hidden" id="menuAdmin" onclick="showSection('adminSection', 'menuAdmin')">
+          <span>⚙</span>
+          Panel Admin
+        </button>
+
+        <button class="menu-item" onclick="logout()">
+          <span>↪</span>
+          Logout
+        </button>
+      </nav>
+
+      <div class="server-card">
+        <p>Waktu Server</p>
+        <h3 id="serverClock">--:--:--</h3>
+        <span id="serverDate">Telkom University</span>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Absensi Online Cloud</p>
+          <h1 id="welcomeText">Halo, Administrator 👋</h1>
+          <p id="userInfo" class="muted-text">Login sebagai Administrator</p>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="icon-btn" title="Search">⌕</button>
+          <button class="icon-btn" title="Notification">🔔</button>
+          <button class="icon-btn" title="Theme">☾</button>
+
+          <div class="profile-pill">
+            <div class="avatar" id="avatarInitial">A</div>
+            <div>
+              <p id="profileName">Administrator</p>
+              <span id="profileRole">admin</span>
+            </div>
           </div>
-          <button class="danger" onclick="logout()">Logout</button>
         </div>
-      </div>
+      </header>
 
-      <div class="grid">
-        <div class="card">
-          <h3>Absensi Hari Ini</h3>
-          <textarea id="note" placeholder="Catatan absensi"></textarea>
-          <button onclick="checkIn()">Check-in</button>
-          <button onclick="checkOut()">Check-out</button>
-          <p id="msg"></p>
+      <!-- DASHBOARD SECTION -->
+      <section id="dashboardSection" class="content-section">
+        <div class="hero-card">
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h2 id="heroTitle">Selamat Datang di Sistem Absensi</h2>
+            <p>
+              Sistem absensi mahasiswa berbasis AWS EC2, Docker, Kubernetes Minikube,
+              PostgreSQL, dan QR Code.
+            </p>
+          </div>
+
+          <div class="hero-visual">
+            <div class="clock-illustration">⏱</div>
+          </div>
         </div>
 
-        <div class="card">
-          <h3>Riwayat Saya</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Tanggal</th>
-                <th>Masuk</th>
-                <th>Pulang</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="myTable"></tbody>
-          </table>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue">👥</div>
+            <h3 id="totalUsers">0</h3>
+            <p>Total User</p>
+            <span>Mahasiswa terdaftar</span>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon green">✅</div>
+            <h3 id="checkInToday">0</h3>
+            <p>Check-in</p>
+            <span>Hari ini</span>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon purple">↪</div>
+            <h3 id="checkOutToday">0</h3>
+            <p>Check-out</p>
+            <span>Hari ini</span>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon red">📊</div>
+            <h3 id="attendanceRate">0%</h3>
+            <p>Kehadiran</p>
+            <span>Hari ini</span>
+          </div>
         </div>
-      </div>
 
-      <div id="adminBox" class="card hidden">
-        <h3>Panel Admin</h3>
+        <div class="dashboard-grid">
+          <div class="panel-card">
+            <div class="section-title">
+              <span></span>
+              <h2>Absensi Cepat</h2>
+            </div>
 
-        <h4>Tambah User</h4>
-        <input id="newName" placeholder="Nama" />
-        <input id="newEmail" placeholder="Email" />
-        <input id="newPassword" type="password" placeholder="Password" />
-        <select id="newRole">
-          <option value="user">User</option>
-          <option value="admin">Admin</option>
-        </select>
-        <button onclick="createUser()">Tambah User</button>
+            <textarea id="quickNote" placeholder="Catatan absensi (opsional)"></textarea>
 
-        <h4>Semua Data Absensi</h4>
-        <table>
-          <thead>
-            <tr>
-              <th>Nama</th>
-              <th>Email</th>
-              <th>Tanggal</th>
-              <th>Masuk</th>
-              <th>Pulang</th>
-            </tr>
-          </thead>
-          <tbody id="adminTable"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+            <div class="button-row">
+              <button class="btn-primary" onclick="checkInFromQuick()">Check-in</button>
+              <button class="btn-secondary" onclick="checkOut()">Check-out</button>
+            </div>
 
-  <script src="app.js"></script>
+            <p id="quickMsg" class="message-text"></p>
+          </div>
+
+          <div class="panel-card">
+            <div class="section-title">
+              <span></span>
+              <h2>Riwayat Terbaru</h2>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Masuk</th>
+                    <th>Pulang</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="recentTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ATTENDANCE SECTION -->
+      <section id="attendanceSection" class="content-section hidden">
+        <div class="panel-card">
+          <div class="section-title">
+            <span></span>
+            <h2>Absensi Hari Ini</h2>
+          </div>
+
+          <p class="muted-text">
+            Kamu dapat melakukan check-in manual atau menggunakan QR Code dari admin.
+          </p>
+
+          <div class="form-group">
+            <label>Catatan Absensi</label>
+            <textarea id="note" placeholder="Contoh: Hadir tepat waktu"></textarea>
+          </div>
+
+          <div class="button-row">
+            <button class="btn-primary" onclick="checkIn()">Check-in Manual</button>
+            <button class="btn-secondary" onclick="checkOut()">Check-out</button>
+          </div>
+
+          <p id="msg" class="message-text"></p>
+        </div>
+      </section>
+
+      <!-- HISTORY SECTION -->
+      <section id="historySection" class="content-section hidden">
+        <div class="panel-card">
+          <div class="section-title">
+            <span></span>
+            <h2>Riwayat Absensi Saya</h2>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Masuk</th>
+                  <th>Pulang</th>
+                  <th>Status</th>
+                  <th>Catatan</th>
+                </tr>
+              </thead>
+              <tbody id="myTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- QR SECTION -->
+      <section id="qrSection" class="content-section hidden">
+        <div class="qr-layout">
+          <div class="panel-card">
+            <div class="section-title">
+              <span></span>
+              <h2>Scan QR Absensi</h2>
+            </div>
+
+            <p class="muted-text">
+              Arahkan kamera ke QR Code yang ditampilkan oleh admin/dosen.
+            </p>
+
+            <div id="qr-reader" class="qr-reader"></div>
+
+            <div class="button-row">
+              <button class="btn-primary" onclick="startQrScanner()">Mulai Scan QR</button>
+              <button class="btn-secondary" onclick="stopQrScanner()">Stop Scan</button>
+            </div>
+
+            <p id="qrMessage" class="message-text"></p>
+          </div>
+
+          <div class="panel-card qr-help">
+            <h3>Cara Menggunakan QR</h3>
+            <ol>
+              <li>Admin membuat QR absensi hari ini.</li>
+              <li>Mahasiswa login ke aplikasi.</li>
+              <li>Mahasiswa membuka menu Scan QR.</li>
+              <li>Scan QR dari layar admin/dosen.</li>
+              <li>Absensi otomatis tersimpan ke database.</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <!-- ADMIN SECTION -->
+      <section id="adminSection" class="content-section hidden">
+        <div class="admin-grid">
+          <div class="panel-card">
+            <div class="section-title">
+              <span></span>
+              <h2>QR Absensi</h2>
+            </div>
+
+            <p class="muted-text">
+              Generate QR untuk absensi mahasiswa. QR berlaku selama 15 menit.
+            </p>
+
+            <button class="btn-primary" onclick="generateQrSession()">Buat QR Hari Ini</button>
+
+            <div id="qrAdminBox" class="qr-admin-box">
+              <p class="muted-text">QR belum dibuat.</p>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="section-title">
+              <span></span>
+              <h2>Tambah User</h2>
+            </div>
+
+            <div class="form-group">
+              <label>Nama Lengkap</label>
+              <input id="newName" placeholder="Nama mahasiswa/admin" />
+            </div>
+
+            <div class="form-group">
+              <label>Email</label>
+              <input id="newEmail" type="email" placeholder="email@example.com" />
+            </div>
+
+            <div class="form-group">
+              <label>Password</label>
+              <input id="newPassword" type="password" placeholder="Password" />
+            </div>
+
+            <div class="form-group">
+              <label>Role</label>
+              <select id="newRole">
+                <option value="user">User / Mahasiswa</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <button class="btn-primary" onclick="createUser()">Tambah User</button>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="section-title">
+            <span></span>
+            <h2>Semua Data Absensi</h2>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nama</th>
+                  <th>Email</th>
+                  <th>Tanggal</th>
+                  <th>Masuk</th>
+                  <th>Pulang</th>
+                  <th>Status</th>
+                  <th>Catatan</th>
+                </tr>
+              </thead>
+              <tbody id="adminTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer-card">
+        <div>
+          <p>© 2026 Absensi Online Cloud</p>
+          <span>AWS EC2 + Docker + Kubernetes Minikube + PostgreSQL</span>
+        </div>
+
+        <div class="footer-tech">
+          <span>AWS</span>
+          <span>Docker</span>
+          <span>K8s</span>
+          <span>PostgreSQL</span>
+        </div>
+      </footer>
+    </main>
+  </section>
 </body>
 </html>
